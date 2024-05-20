@@ -1,0 +1,24 @@
+{
+  "name": "multiplayer-model",
+  "type": "module",
+  "version": "0.0.1",
+  "scripts": {
+    "dev": "astro dev",
+    "party": "partykit dev",
+    "start": "astro dev",
+    "build": "astro check && astro build",
+    "preview": "astro preview",
+    "astro": "astro"
+  },
+  "dependencies": {
+    "astro": "^4.8.6",
+    "@astrojs/check": "^0.7.0",
+    "partykit": "^0.0.105",
+    "partysocket": "^1.0.1",
+    "three": "^0.164.1",
+    "typescript": "^5.4.5"
+  },
+  "devDependencies": {
+    "@types/three": "^0.164.0"
+  }
+}

@@ -1,0 +1,292 @@
+---
+const host = import.meta.env.PUBLIC_COMMUNITY_SERVER ?? 'localhost:1999';
+---
+
+<html lang="en">
+	<head>
+		<meta charset="utf-8" />
+		<link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+		<meta name="viewport" content="width=device-width" />
+		<meta name="generator" content={Astro.generator} />
+		<title>Astro</title>
+	</head>
+	<body>
+		<h1>Multiplayer Model</h1>
+		<div id="model-viewport"></div>
+		<div data-host={host} />
+	</body>
+</html>
+<script>
+	import {
+		Scene,
+		PerspectiveCamera,
+		WebGLRenderer,
+		BoxGeometry,
+		MeshBasicMaterial,
+		Mesh,
+		Vector3,
+		EdgesGeometry,
+		LineSegments,
+		LineBasicMaterial,
+	} from 'three';
+	import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+	import PartySocket from "partysocket";
+	import { ServerMessage, ClientMessage } from '../utils/constants';
+	import type { MessageEnvelope, MousePos } from '../utils/constants';
+
+	const dummyElement: HTMLDivElement = document.querySelector('#dummy-element') || document.createElement('div');
+	dummyElement.setAttribute('id', 'dummy-element');
+	if (!dummyElement.parentElement) {
+		document.body.appendChild(dummyElement);
+	}
+
+	const hackForHost: HTMLDivElement = document.querySelector("[data-host]") || dummyElement;
+	const host = hackForHost?.dataset?.host ?? 'localhost:1999';
+
+	const scene = new Scene();
+	const camera = new PerspectiveCamera( 75, window.innerWidth / window.innerHeight, 0.1, 1000 );
+
+	const renderer = new WebGLRenderer();
+	renderer.setSize( window.innerWidth, window.innerHeight );
+
+	const viewportElement: HTMLDivElement = document.querySelector('#model-viewport') || dummyElement;
+	viewportElement.appendChild( renderer.domElement );
+
+	const geometry = new BoxGeometry( 50, 50, 50 );
+	const edges = new EdgesGeometry( geometry );
+	const line = new LineSegments(edges, new LineBasicMaterial( { color: 0x000000 } ) );
+	scene.add( line );
+
+	const material = new MeshBasicMaterial( { color: 0x00ff00 } );
+	const cube = new Mesh( geometry, material );
+	scene.add( cube );
+
+	let controls = new OrbitControls( camera, renderer.domElement );
+
+	// these values are shared to other players
+	const sharedCameraPos = new Vector3();
+	const sharedCameraTarget = new Vector3();
+
+	function startInteractivity () {
+
+		controls = new OrbitControls( camera, renderer.domElement );
+
+		controls.update();
+	}
+
+	const partySocket = new PartySocket({
+		host,
+		room: "default-room",
+		protocol: 'ws',
+	});
+
+	let _playerId = '';
+	const players: {
+		[playerId: string]: {
+		mouse: MousePos
+	}} = {};
+	let hasControlLock = false;
+
+	partySocket.addEventListener("message", (e:  { data: string }) => {
+		console.log(e.data);
+
+		let msg: MessageEnvelope;
+
+		try {
+			msg = JSON.parse(e.data);
+		} catch (e: any) {
+			console.error(e.message);
+			return;
+		}
+
+		switch (msg.name) {
+			case (ServerMessage.YOUR_INFO): {
+				_playerId = msg.playerId;
+
+				// server provides camera position
+				copyCameraState(msg);
+				startInteractivity();
+				break;
+			}
+			case (ServerMessage.CAMERA_UPDATE): {
+				copyCameraState(msg);
+				break;
+			}
+			case (ServerMessage.MOUSE_PLAYER_LOCKED): {
+				if (msg.playerId !== _playerId) {
+					hasControlLock = false;
+					lockMouseControls();
+				} else {
+					hasControlLock = true;
+				}
+				break;
+			}
+			case (ServerMessage.MOUSE_LOCK_RELEASED): {
+				allowMouseControls();
+				hasControlLock = false;
+				break;
+			}
+			case (ServerMessage.MOUSE_POS_UPDATE): {
+				if (msg.playerId !== _playerId) {
+					handleMouseUpdate(msg.playerId, {
+						posX: msg.posX,
+						posY: msg.posY,
+						isDragging: msg.isDragging,
+					});
+				}
+				break;
+			}
+			default: {
+				break;
+			}
+		}
+	});
+
+	const lockMouseControls = () => {
+		viewportElement.style.pointerEvents = 'none';
+		viewportElement.style.cursor = 'not-allowed';
+	}
+
+	const allowMouseControls = () => {
+		viewportElement.style.pointerEvents = 'all';
+		viewportElement.style.cursor = 'none';
+	}
+
+	const envelope = (msg: MessageEnvelope) => {
+		return JSON.stringify(msg);
+	}
+
+	const copyCameraState = (msg: MessageEnvelope) => {
+		if (hasControlLock) {
+			return;
+		}
+
+		const newPosition = new Vector3(msg.cameraPos.x, msg.cameraPos.y, msg.cameraPos.z);
+		const newTarget = new Vector3(msg.cameraTarget.x, msg.cameraTarget.y, msg.cameraTarget.z);
+
+		controls.object.position.copy(newPosition);
+		controls.target.copy(newTarget);
+		controls.object.lookAt(newTarget);
+	};
+
+	const requestMouseDown = () => {
+		partySocket.send(envelope({
+			name: ClientMessage.REQUEST_MOUSE_CONTROL,
+		}));
+	};
+
+	const releaseMouseControl = () => {
+		partySocket.send(envelope({
+			name: ClientMessage.MOUSE_LOCK_RELEASED,
+		}));
+	};
+
+	const drawPlayerMouse = (playerId: string, mousePos: MousePos) => {
+		let playerPointer: HTMLDivElement = viewportElement.parentElement?.querySelector(`.pointer[data-id="${playerId}"]`) as HTMLDivElement;
+
+		if (!playerPointer) {
+			const pointerElement: HTMLDivElement = document.createElement('div');
+			pointerElement.classList.add('pointer');
+			pointerElement.dataset.id = playerId;
+
+			pointerElement.style.width = '1rem';
+			pointerElement.style.height = '1rem';
+			pointerElement.style.borderRadius = '1rem';
+			pointerElement.style.borderWidth = '0.1rem';
+			pointerElement.style.position = 'absolute';
+
+			if (_playerId === playerId) {
+				pointerElement.style.backgroundColor = 'red';
+			} else {
+				pointerElement.style.backgroundColor = 'grey';
+			}
+
+			viewportElement.parentElement?.appendChild(pointerElement);
+			playerPointer = viewportElement.parentElement?.querySelector(`.pointer[data-id="${playerId}"]`) || dummyElement;
+		}
+
+		if (_playerId === playerId) {
+			if (mousePos.isDragging) {
+				playerPointer.style.backgroundColor = 'blue';
+			} else {
+				playerPointer.style.backgroundColor = 'red';
+				playerPointer.style.borderColor = 'pink';
+			}
+		} else {
+			if (mousePos.isDragging) {
+				playerPointer.style.backgroundColor = 'white';
+			} else {
+				playerPointer.style.backgroundColor = 'grey';
+			}
+		}
+
+		playerPointer.style.left = `${mousePos.posX}px`;
+		playerPointer.style.top = `${mousePos.posY}px`;
+	};
+
+	const handleMouseUpdate = (playerId: string, mousePos: MousePos) => {
+		const { posX = 0, posY = 0, isDragging = false} = mousePos;
+
+		if (players[playerId] === undefined) {
+			players[playerId] = {
+				mouse: {
+					posX,
+					posY,
+					isDragging,
+				},
+			};
+		} else {
+			players[playerId].mouse.posX = posX;
+			players[playerId].mouse.posY = posY;
+			players[playerId].mouse.isDragging = isDragging;
+		}
+
+		if (_playerId === playerId) {
+			partySocket.send(envelope({
+				name: ClientMessage.MOUSE_POS_UPDATE,
+				posX,
+				posY,
+				isDragging,
+				cameraPos: {x: sharedCameraPos.x, y: sharedCameraPos.y, z: sharedCameraPos.z},
+				cameraTarget: {x: sharedCameraTarget.x, y: sharedCameraTarget.y, z: sharedCameraTarget.z}
+			}));
+		}
+
+		drawPlayerMouse(playerId, mousePos);
+	}
+
+	viewportElement.addEventListener('mousedown', (event: any) => {
+		if (event.button === 0) { // left mouse click
+			requestMouseDown();
+		}
+	});
+
+	viewportElement.addEventListener('mouseup', (event: any) => {
+		if (event.button === 0) { // left mouse click
+			releaseMouseControl();
+		}
+	});
+
+	viewportElement.addEventListener('mousemove', (event: any) => {
+		const { clientX, clientY, buttons } = event;
+		const isLeftPressed = buttons === 1; // primary button. see https://developer.mozilla.org/en-US/docs/Web/API/MouseEvent/buttons
+		handleMouseUpdate(_playerId, {
+			posX: clientX,
+			posY: clientY,
+			isDragging: isLeftPressed,
+		});
+	});
+
+	function animate() {
+		requestAnimationFrame( animate );
+		controls.update();
+
+		// just need to share camera position and direction
+		sharedCameraPos.copy(controls.object.position);
+		sharedCameraTarget.copy(controls.target);
+
+		renderer.render( scene, camera );
+	}
+	animate();
+
+</script>
