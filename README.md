@@ -10,6 +10,7 @@ This is a sandbox demo that demonstrates a collaborative environment with [Three
 1) Follow [PartyKit's deployment instructions](https://docs.partykit.io/guides/deploying-your-partykit-server/) to deploy your server
 2) copy the `.env.sample` to `.env` and copy/paste the URL you received from step 1. Should be something like http://[package.json-name].[github-id].partykit.dev
 3) run `yarn build` to make the frontend dist and deploy it
+4) NOTE: You need to deploy to http since the url in 2 is also http. Note that browsers may need to 'forget' HSTS on your deployed URL  
 
 ### Caveats
 no auth
