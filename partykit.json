@@ -1,8 +1,5 @@
 {
   "name": "multiplayer-model",
   "main": "src/server/server.ts",
-  "port": 1999,
-  "crons": {
-    "clean-connections": "*/5 * * * * *"
-  }
+  "port": 1999
 }
