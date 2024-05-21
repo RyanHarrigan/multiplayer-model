@@ -11,8 +11,12 @@ const host = import.meta.env.PUBLIC_COMMUNITY_SERVER ?? 'localhost:1999';
 		<title>Astro</title>
 	</head>
 	<body>
-		<h1>Multiplayer Model</h1>
-		<div id="model-viewport"></div>
+		<div class="w-[100vw] h-[100vh] p-12 flex flex-col justify-center items-center bg-purple-500">
+			<h1 class="text-purple-900 text-6xl mb-10 shrink">Multiplayer Model</h1>
+			<div id="viewport-container" class="max-w-[80rem] max-h-[100vh] w-full h-full grow rounded-3xl overflow-hidden cursor-none">
+				<div id="model-viewport" class="w-full" />
+			</div>
+		</div>
 		<div data-host={host} />
 	</body>
 </html>
@@ -47,7 +51,9 @@ const host = import.meta.env.PUBLIC_COMMUNITY_SERVER ?? 'localhost:1999';
 	const camera = new PerspectiveCamera( 75, window.innerWidth / window.innerHeight, 0.1, 1000 );
 
 	const renderer = new WebGLRenderer();
-	renderer.setSize( window.innerWidth, window.innerHeight );
+	const container: HTMLDivElement = document.querySelector('#viewport-container') || dummyElement;
+
+	renderer.setSize( container.clientWidth, container.clientHeight );
 
 	const viewportElement: HTMLDivElement = document.querySelector('#model-viewport') || dummyElement;
 	viewportElement.appendChild( renderer.domElement );
@@ -57,7 +63,7 @@ const host = import.meta.env.PUBLIC_COMMUNITY_SERVER ?? 'localhost:1999';
 	const line = new LineSegments(edges, new LineBasicMaterial( { color: 0x000000 } ) );
 	scene.add( line );
 
-	const material = new MeshBasicMaterial( { color: 0x00ff00 } );
+	const material = new MeshBasicMaterial( { color: 0xefefef } );
 	const cube = new Mesh( geometry, material );
 	scene.add( cube );
 

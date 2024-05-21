@@ -11,10 +11,12 @@
     "astro": "astro"
   },
   "dependencies": {
-    "astro": "^4.8.6",
     "@astrojs/check": "^0.7.0",
+    "@astrojs/tailwind": "^5.1.0",
+    "astro": "^4.8.6",
     "partykit": "^0.0.105",
     "partysocket": "^1.0.1",
+    "tailwindcss": "^3.4.3",
     "three": "^0.164.1",
     "typescript": "^5.4.5"
   },
